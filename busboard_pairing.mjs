@@ -3,6 +3,7 @@ import promptSync from "prompt-sync";
 import readline from "readline-sync";
 console.log("Please enter a valid postcode: ");
 const postcode = readline.prompt();
+// Hello
 
 // Postcode
 // let postcode = "RM142XA";
@@ -43,3 +44,4 @@ for (let i = 0; i < arrivals.length; i++) {
     }
     console.log(`Bus to ${arrival.destinationName} arriving in ${time} ${units}.`);
 }
+
