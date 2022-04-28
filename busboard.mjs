@@ -1,12 +1,21 @@
 import fetch from "node-fetch";
-// import prompt from "prompt-sync";
-// let stopCode = prompt('Please enter a valid TfL bus stop code: ');
-// console.log(stopCode);
-let stopCode = "490008660N";
+
+// Postcode
+let postcode = "RM142XA";
+const postcodeResponse = await fetch(`https://api.postcodes.io/postcodes/${postcode}`);
+const postcodeDetails = await postcodeResponse.json();
+const lat = postcodeDetails.result.latitude;
+const long = postcodeDetails.result.longitude;
+
+// Bus Stop
+const busStopResponse = await fetch(`https://api.tfl.gov.uk/StopPoint/?lat=${lat}&lon=${long}&stopTypes=NaptanPublicBusCoachTram`);
+const busStopDetails = await busStopResponse.json();
+busStopDetails.stopPoints.sort((a, b) => a.distance - b.distance);
+let stopCode = (busStopDetails.stopPoints[0].id);
+
+// Bus Times
 let apiKey = "d32dc34554204e6f875b8c3c3e599f56";
-const response = await fetch(`https://api.tfl.gov.uk/StopPoint/${stopCode}/Arrivals${
-    typeof apiKey !== 'undefined' ? `?app_key=${apiKey}` : ""
-}`);
+const response = await fetch(`https://api.tfl.gov.uk/StopPoint/${stopCode}/Arrivals?app_key=${apiKey}`);
 const arrivals = await response.json();
 
 arrivals.sort((a, b) => a.timeToStation - b.timeToStation);
