@@ -2,7 +2,8 @@
 
 node_modules
 
-# Ignore JSON files
+# Ignore log files
+*.log
 
-# package.json
-# package-lock.json
+# Ignore busboard_pairing
+busboard_pairing.mjs
