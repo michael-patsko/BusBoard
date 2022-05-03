@@ -4,18 +4,18 @@ import readline from "readline-sync";
 import winston from 'winston';
 
 
-const { combine, timestamp, printf, colorize, align } = winston.format;
+const {combine, timestamp, align, printf} = winston.format;
 const logger = winston.createLogger({
+    transports: [
+        new winston.transports.File({ filename: 'combined.log' })
+        ],
     format: combine(
-      colorize({ all: true }),
-      timestamp({
-        format: 'YYYY-MM-DD hh:mm:ss.SSS A',
-      }),
-      align(),
-      printf((info) => `[${info.timestamp}] ${info.level}: ${info.message}`)
-    ),
-    transports: [new winston.transports.Console()],
-  });
+        timestamp({
+            format: 'YYYY-MM-DD hh:mm:ss A',
+        }),
+        align(),
+        printf((info) => `[${info.timestamp}] ${info.level}: ${info.message}`)),
+});
   
 
 let postcode = "";
@@ -30,7 +30,7 @@ while (!postcodeValid){
         const postcodeValidationResponse = await fetch(`https://api.postcodes.io/postcodes/${postcode}/validate`);
         const postcodeValidation = await postcodeValidationResponse.json();
             if (!postcodeValidation.result) {
-                logger.error("Invalid postcode");
+                logger.error(`Invalid postcode: ${postcode}`);
                 throw new Error ("Invalid postcode");
             }
             postcodeValid = true
@@ -53,7 +53,7 @@ try {
     const busStopResponse = await fetch(`https://api.tfl.gov.uk/StopPoint/?lat=${lat}&lon=${long}&stopTypes=NaptanPublicBusCoachTram&radius=500`);
     const busStopDetails = await busStopResponse.json();
     if (busStopDetails.stopPoints.length === 0) {
-        logger.error("No bus stops nearby");
+        logger.error(`No bus stops nearby ${postcode}`);
         throw new Error ("No bus stops nearby")
     }
 } catch (err) {
@@ -67,39 +67,52 @@ busStopDetails.stopPoints.sort((a, b) => a.distance - b.distance);
 // Bus Times
 let apiKey = "d32dc34554204e6f875b8c3c3e599f56";
 
-var dict = {};
+var stopsAndArrivals = {};
 
 for (let j = 0; j < 2; j ++) {
     let stopCode = (busStopDetails.stopPoints[j].id);
     const response = await fetch(`https://api.tfl.gov.uk/StopPoint/${stopCode}/Arrivals?app_key=${apiKey}`);
     const arrivals = await response.json();
     arrivals.sort((a, b) => a.timeToStation - b.timeToStation);
-    dict[busStopDetails.stopPoints[j].commonName] = [];
+    stopsAndArrivals[`${busStopDetails.stopPoints[j].commonName}, ${stopCode}`] = [];
 
     for (let i = 0; i < arrivals.length; i++) {
         const arrival = arrivals[i];
-        dict[busStopDetails.stopPoints[j].commonName].push(`       Bus ${arrival.lineName} to ${arrival.destinationName} arriving in ${timeUnits(arrival.timeToStation)}.`);
+        stopsAndArrivals[`${busStopDetails.stopPoints[j].commonName}, ${stopCode}`].push(`       Bus ${arrival.lineName} to ${arrival.destinationName} arriving in ${timeUnits(arrival.timeToStation)}.`);
     }
 } 
-let counter = 0;
-Object.entries(dict).forEach(([key, value]) => {
-    if (value.length === 0) counter += 1;
-  })
+const noArrivals = Object.entries(stopsAndArrivals).every(([key, value]) => value.length === 0);
 
 try {
-    if (counter === 2) {
-        logger.error("No buses coming");
+    if (noArrivals) {
         throw new Error ("No buses coming");
     }
 }
 catch (err) {
+    logger.error(`No buses arriving near ${postcode}`);
     console.log("\nThere are no buses arriving.");
     throw err.message;
 }
-Object.entries(dict).forEach(([key, value]) => {
-    console.log(key);
+Object.entries(stopsAndArrivals).forEach(([key, value]) => {
+    if( value.length !== 0) console.log(key);
     value.forEach(element => console.log(element));
   })
+
+
+  console.log(`Do you need directions to ${Object.keys(stopsAndArrivals)[0].slice(0,-12)}? y/n`);
+  const directionsResponse = readline.prompt();
+  if (directionsResponse === 'y') {
+    const directionsResponse = await fetch(`https://api.tfl.gov.uk/Journey/JourneyResults/${postcode}/to/${busStopDetails.stopPoints[0].id}`);
+    const directionsDetails = await directionsResponse.json();
+    const steps = directionsDetails.journeys[0].legs[0].instruction.steps;
+    Object.entries(steps).forEach(([key, value]) => {
+        key == 0 ? console.log(`Continue ${value.skyDirectionDescription.toLowerCase()} along ${value.description}.`) : console.log(`${value.descriptionHeading} ${value.description}.`);
+      })
+  }
+
+  
+  
+
 function timeUnits(time) {
     if (time === 1) {
         return time + " second";
